@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user')
 const bcrypt = require('bcryptjs')
+const crypto = require('crypto')
 
 // registration-----------
 exports.registerUser = async (req,res) => {
@@ -67,5 +68,66 @@ exports.loginUser = async (req, res) => {
 }
 
 //forget password
+exports.forgotPassword = async (req,res) => {
+  try{
+    const {email} = req.body
 
+    const user = await User.findOne({email})
+    if(!user){
+      return res.status(404).json({sucess: false, message: 'user not found'})
+    }
+
+    const resetToken = crypto.randomBytes(20).toString('hex')
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now()+10*60*1000
+
+    await user.save()
+
+    const resetUrl = `http://localhost:3000/resetpassword/${resetToken}`
+    console.log(`Reset link sent ${resetUrl}`);
+    
+    res.status(200).json({
+      success: true,
+      message: "sent link on your email id"
+    })
+  }catch(error){
+    res.status(500).json({success: false, message: error.message})
+  }
+}
+
+
+exports.resetPassword = async (req,res)=> {
+  try{
+    const {token} = req.params;
+    const {password} = req.body;
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: {$gt: Date.now()}
+    });
+
+
+    if(!user){
+      return res.status(400).json({
+        success: false,
+        message: 'link is invalid'
+      })
+    }
+    
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+  
+    await user.save()
+
+    res.status(200).json({
+      success: true,
+      message: "password changed"
+    })
+  }catch(error){
+    res.status(500).json({success: false, message: error.message})
+  }
+}
 
