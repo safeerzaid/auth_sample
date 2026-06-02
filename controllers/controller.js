@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/user')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
+const transporter = require('../config/mailer')
 
 // registration-----------
 exports.registerUser = async (req,res) => {
@@ -31,41 +32,47 @@ exports.registerUser = async (req,res) => {
 // login-----------------------
 
 exports.loginUser = async (req, res) => {
-  try{
-    const {email,password} = req.body
+  try {
+    const { email, password } = req.body;
 
-    if(!email || !password){
-      return res.status(400).json({message: 'all fields are required'})
+    if (!email || !password) {
+      return res.status(400).json({ message: 'all fields are required' });
     }
 
-    const user = await User.findOne({email})
-    if(!user){
-      return res.status(400).json({message: 'invalid credintials'})
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'invalid credintials' });
     }
    
     const isMatch = await bcrypt.compare(password, user.password);
-    if(!isMatch){
-      return res.status(400).json({message: 'Invalid credintials'})
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid credintials' });
     }
 
-   const token = jwt.sign(
-    {id: user._id},
-    process.env.JWT_SECRET,
-    {expiresIn: '1d'}
-   );
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+   
+    res.cookie('token', token, {
+      httpOnly: true,  
+      secure: false,   
+      maxAge: 24 * 60 * 60 * 1000 
+    });
 
     res.status(200).json({
       message: 'Login Successful',
-      token: token,
       user: {
         id: user._id,
         email: user.email
       }
-    })
-  }catch(error){
-    res.status(500).json({error: error.message})
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-}
+};
 
 //forget password
 exports.forgotPassword = async (req,res) => {
@@ -84,7 +91,17 @@ exports.forgotPassword = async (req,res) => {
     await user.save()
 
     const resetUrl = `http://localhost:3000/resetpassword/${resetToken}`
-    console.log(`Reset link sent ${resetUrl}`);
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: user.email,
+      subject: 'Password Reset Request',
+      html: `
+        <h3>Reset Your Password</h3>
+        <p>Click the link below. It expires in <b>10 minutes</b>.</p>
+        <a href="${resetUrl}">Reset Password</a>
+        <p>If you didn't request this, ignore this email.</p>`
+})
     
     res.status(200).json({
       success: true,
@@ -131,3 +148,12 @@ exports.resetPassword = async (req,res)=> {
   }
 }
 
+// logout-----------------------
+exports.logoutUser = async (req, res) => {
+  try {
+    res.clearCookie('token');
+    res.status(200).json({ message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

@@ -1,6 +1,6 @@
 const express = require('express');
-const { registerUser, loginUser, forgotPassword, resetPassword } = require('../controllers/controller');
-const { protect } = require('../middleware/authMiddleware');
+const { registerUser, loginUser, forgotPassword, resetPassword,logoutUser } = require('../controllers/controller');
+const { protect,authorizeRoles} = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
@@ -14,7 +14,19 @@ router.get('/profile', protect, (req,res) => {
   })
 })
 
+router.get(
+  '/admin',
+  protect,
+  authorizeRoles('admin'),
+  (req, res) => {
+    res.json({
+      message: 'Welcome Admin'
+    });
+  }
+);
+
 router.post('/forgot-password', forgotPassword)
 router.put('/reset-password/:token', resetPassword)
+router.post('/logout', logoutUser)
 
 module.exports = router;
